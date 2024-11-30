@@ -1,0 +1,188 @@
+---
+
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="generator" content={Astro.generator} />
+    <title>Astro</title>
+  </head>
+  <body>
+    <div class="container chat-app">
+      <h1 class="chat-header">My Chat App</h1>
+
+      <nav class="room-buttons">
+        <button class="btn-room" data-room="room1">Room 1</button>
+        <button class="btn-room" data-room="room2">Room 2</button>
+        <button class="btn-room" data-room="room3">Room 3</button>
+      </nav>
+
+      <form class="message-form input-area">
+        <input
+          type="text"
+          id="usernameInput"
+          placeholder="Enter your username"
+        />
+        <input type="text" id="messageInput" placeholder="Enter your message" />
+        <button type="submit">Send message</button>
+      </form>
+
+      <h2>Messages</h2>
+      <ul class="messages"></ul>
+    </div>
+
+    <script type="module">
+      import { io } from "https://cdn.socket.io/4.8.1/socket.io.esm.min.js";
+
+      const socket = io("http://localhost:3000"); // Socket backend url
+
+      const usernameInput = document.querySelector("#usernameInput");
+      const messages = document.querySelector(".messages");
+      let currentRoom = "";
+
+      // Send message
+      const messageForm = document.querySelector(".message-form");
+      messageForm.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const username = usernameInput.value.trim() || "Anonymous";
+        const messageInput = messageForm
+          .querySelector("#messageInput")
+          .value.trim();
+        if (currentRoom && messageInput) {
+          socket.emit("sendMessage", {
+            username,
+            message: messageInput,
+            room: currentRoom,
+          });
+          messageForm.querySelector("#messageInput").value = "";
+        }
+      });
+
+      // Listen for any messages from the server
+      socket.on("newMessage", (data) => {
+        if (data.room === currentRoom) {
+          const li = document.createElement("li");
+          li.innerHTML = `<strong>${data.username}:</strong> ${data.message}`;
+          messages.appendChild(li);
+        }
+      });
+
+      const roomButtons = document.querySelectorAll(".btn-room");
+
+      // Handle room buttons
+      roomButtons.forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const newRoom = btn.getAttribute("data-room");
+          const username = usernameInput.value.trim() || "Anonymous";
+
+          if (currentRoom) {
+            // Leave the current room
+            socket.emit("leave room", { room: currentRoom, username });
+          }
+
+          // Join new room
+          currentRoom = newRoom;
+
+          // Clear the messages ul
+          messages.innerHTML = "";
+
+          // Fetch data for the new room
+          await fetchData();
+
+          // Join the new room
+          socket.emit("join room", { room: currentRoom, username });
+        });
+      });
+
+      const fetchData = () => {
+        return fetch(`http://localhost:3000/api/chat/${currentRoom}`)
+          .then((response) => response.json())
+          .then((data) => {
+            data.forEach((item) => {
+              const username = item.username;
+              const message = item.message;
+              const listItem = document.createElement("li");
+
+              listItem.innerHTML = `<strong>${username}:</strong> ${message}`;
+              messages.appendChild(listItem);
+            });
+          })
+          .catch((error) => {
+            console.error(error);
+          });
+      };
+    </script>
+
+    <style>
+      .chat-app {
+        font-family: Arial, sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 20px;
+      }
+
+      .chat-header h1 {
+        margin: 0;
+        font-size: 24px;
+      }
+
+      .room-buttons {
+        display: flex;
+        gap: 10px;
+        margin: 10px 0;
+      }
+
+      .room-buttons button {
+        padding: 5px 10px;
+        border: none;
+        border-radius: 5px;
+        background-color: #efefef;
+        cursor: pointer;
+      }
+
+      .input-area {
+        display: flex;
+        gap: 5px;
+        margin-bottom: 20px;
+      }
+
+      .input-area input {
+        padding: 5px;
+        flex: 1;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+      }
+
+      .input-area button {
+        padding: 5px 15px;
+        border: none;
+        border-radius: 5px;
+        background-color: #4caf50;
+        color: white;
+        cursor: pointer;
+      }
+
+      .messages {
+        width: 100%;
+        max-width: 500px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        overflow-y: auto;
+        max-height: 300px;
+        border: 1px solid #ddd;
+        padding: 10px;
+        border-radius: 5px;
+      }
+
+      .message {
+        padding: 5px 10px;
+        border-radius: 10px;
+      }
+    </style>
+  </body>
+</html>
